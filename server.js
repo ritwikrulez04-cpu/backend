@@ -1,23 +1,39 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import dotenv from "dotenv";
-import productRoutes from "./routes/products.js";
-import cartRoutes from "./routes/cart.js";
-import checkoutRoutes from "./routes/checkout.js";
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const productRoutes = require('./routes/productRoutes');
+require('dotenv').config();
 
-dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// ✅ CORS FIX — allow your StackBlitz frontend URL
+const allowedOrigins = [
+  'https://reactviter9hbywuf-4tkm--5173--96435430.local-credentialless.webcontainer.io'
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
+
 app.use(express.json());
 
-app.use("/api/products", productRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/checkout", checkoutRoutes);
+// ✅ Routes
+app.use('/api/products', productRoutes);
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
-  .catch((err) => console.error("MongoDB error:", err));
+// ✅ MongoDB connection
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    app.listen(PORT, () =>
+      console.log(`✅ Server running on http://localhost:${PORT}`)
+    );
+  })
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err);
+  });
