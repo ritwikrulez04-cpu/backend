@@ -1,27 +1,25 @@
-const express = require('express');
+import express from 'express';
+import Product from '../models/Product.js';
+
 const router = express.Router();
-const Product = require('../models/Product');
 
 router.get('/', async (req, res) => {
-  const products = await Product.find();
-  res.json(products);
+  try {
+    const products = await Product.find({});
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 router.post('/', async (req, res) => {
   try {
-    const { id, name, price, description, image } = req.body;
-
-    if (!id || !name || !price) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const newProduct = new Product({ id, name, price, description, image });
-    await newProduct.save();
-    res.status(201).json(newProduct);
-  } catch (err) {
-    console.error('Error adding product:', err);
-    res.status(500).json({ error: 'Failed to add product' });
+    const newProduct = new Product(req.body);
+    const savedProduct = await newProduct.save();
+    res.status(201).json(savedProduct);
+  } catch (error) {
+    res.status(400).json({ message: 'Bad request' });
   }
 });
 
-module.exports = router;
+export default router;
