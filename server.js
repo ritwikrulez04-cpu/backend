@@ -1,7 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import productRoutes from './routes/productRoutes.js'; // note .js extension
+import productRoutes from './routes/productRoutes.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 
 const allowedOrigins = [
   'https://reactviter9hbywuf-4tkm--5173--96435430.local-credentialless.webcontainer.io',
-  'https://backend-x9q4.onrender.com' // Add your Render URL if needed
+  'https://backend-x9q4.onrender.com' // your backend URL
 ];
 
 app.use(cors({
@@ -28,10 +28,12 @@ mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
-  .then(() => {
-    console.log('✅ MongoDB connected');
-    app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-  })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
+.then(() => {
+  console.log('✅ MongoDB connected');
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
   });
+})
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err);
+});
