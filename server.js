@@ -1,36 +1,36 @@
+// server.js
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
-
-import productRoutes from './routes/productRoutes.js';
-import userRoutes from './routes/userRoutes.js';
-
-dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Enable CORS for all origins (change origin to your frontend URL if you want)
+app.use(cors({
+  origin: '*'
+}));
+
 app.use(express.json());
 
-// Routes
-app.use('/api/products', productRoutes);
-app.use('/api/users', userRoutes);
+// In-memory products storage (replace with DB later)
+let products = [];
 
-// Root route
-app.get('/', (req, res) => {
-  res.send('API is running...');
+// Get all products
+app.get('/api/products', (req, res) => {
+  res.json(products);
 });
 
-// MongoDB Connection
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('✅ Connected to MongoDB');
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error('❌ MongoDB connection error:', err.message);
-  });
+// Add a new product
+app.post('/api/products', (req, res) => {
+  const product = req.body;
+  if (!product.name || typeof product.price !== 'number') {
+    return res.status(400).json({ message: 'Bad request: name and price required' });
+  }
+  product.id = products.length + 1;
+  products.push(product);
+  res.status(201).json(product);
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
