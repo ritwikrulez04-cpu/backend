@@ -1,22 +1,36 @@
 {
-  "name": "ecommerce-backend",
+  "name": "shoppyglobe-backend",
   "version": "1.0.0",
-  "type": "module",
-  "main": "server.js",
+  "description": "Backend API for ShoppyGlobe e‑commerce app",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "engines": {
+    "node": ">=16"
   },
   "dependencies": {
-  "express": "^4.18.2",
-  "mongoose": "^7.6.1",
-  "cors": "^2.8.5",
-  "dotenv": "^16.0.3",
-  "bcryptjs": "^2.4.3",
-  "jsonwebtoken": "^9.0.0"
-},
-
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "mongoose": "^6.9.1",
+    "nodemailer": "^6.9.3"
+  },
   "devDependencies": {
     "nodemon": "^2.0.22"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ritwikrulez04-cpu/backend.git"
+  },
+  "keywords": [
+    "express",
+    "mongoose",
+    "nodemailer",
+    "ecommerce",
+    "shoppyglobe"
+  ],
+  "author": "Ritwik Rulez <ritwikrulez04@gmail.com>",
+  "license": "MIT"
 }
