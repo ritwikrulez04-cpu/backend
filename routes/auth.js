@@ -1,57 +1,37 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const nodemailer = require('nodemailer');
+import express from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import { sendVerificationEmail } from '../utils/mailer.js';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET;
 
-// Email transporter setup
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// Generate 6-digit code
-const generateVerificationCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 router.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
-    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Username or email already in use.' });
-    }
+    const exists = await User.findOne({ $or: [{ email }, { username }] });
+    if (exists) return res.status(400).json({ message: 'Username or email already exists.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationCode = generateVerificationCode();
+    const code = generateCode();
 
-    const newUser = new User({
+    const user = new User({
       username,
       email,
       password: hashedPassword,
-      isVerified: false,
-      verificationCode,
+      verificationCode: code,
+      verificationExpires: new Date(Date.now() + 15 * 60000),
     });
 
-    await newUser.save();
+    await user.save();
+    await sendVerificationEmail(email, code);
 
-    // Send email
-    await transporter.sendMail({
-      from: `"ShoppyGlobe" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: 'Verify your email',
-      text: `Your verification code is: ${verificationCode}`,
-    });
-
-    res.status(201).json({ message: 'Registration successful! Check your email for the verification code.' });
+    res.status(201).json({ message: 'Registered. Check your email for the code.' });
   } catch (err) {
-    res.status(500).json({ message: 'Registration failed.', error: err.message });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -59,19 +39,20 @@ router.post('/verify', async (req, res) => {
   const { email, code } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'User not found.' });
-    if (user.isVerified) return res.status(400).json({ message: 'User already verified.' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.isVerified) return res.status(400).json({ message: 'Already verified' });
 
-    if (user.verificationCode === code) {
+    if (user.verificationCode === code && user.verificationExpires > new Date()) {
       user.isVerified = true;
-      user.verificationCode = undefined; // clear code after verification
+      user.verificationCode = null;
+      user.verificationExpires = null;
       await user.save();
-      res.status(200).json({ message: 'Email verified. You can now log in.' });
+      res.json({ message: 'Email verified. You can now log in.' });
     } else {
-      res.status(400).json({ message: 'Invalid verification code.' });
+      res.status(400).json({ message: 'Invalid or expired code.' });
     }
   } catch (err) {
-    res.status(500).json({ message: 'Verification failed.', error: err.message });
+    res.status(500).json({ message: 'Verification failed', error: err.message });
   }
 });
 
@@ -79,17 +60,17 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'User not found.' });
-    if (!user.isVerified) return res.status(403).json({ message: 'Email not verified.' });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.isVerified) return res.status(403).json({ message: 'Email not verified' });
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: 'Incorrect password.' });
+    if (!match) return res.status(400).json({ message: 'Incorrect password' });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.status(200).json({ token, user: { id: user._id, username: user.username, email: user.email } });
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user._id, username: user.username } });
   } catch (err) {
-    res.status(500).json({ message: 'Login failed.', error: err.message });
+    res.status(500).json({ message: 'Login failed', error: err.message });
   }
 });
 
-module.exports = router;
+export default router;
