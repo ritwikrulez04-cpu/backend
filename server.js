@@ -1,54 +1,97 @@
-// server.js
 import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import { sendVerificationEmail } from '../utils/mailer.js';
 
-// Load .env variables
-dotenv.config();
+const router = express.Router();
 
-import authRoutes from './routes/auth.js';
-import productRoutes from './routes/products.js';
-import cartRoutes from './routes/cart.js';
+// Generate a 6-digit code
+const generateVerificationCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
-const app = express();
+// Register route
+router.post('/register', async (req, res) => {
+  const { username, email, password } = req.body;
+  try {
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username or email already in use.' });
+    }
 
-// Middleware
-app.use(cors({
-  origin: '*', // Update to your frontend URL for production
-}));
-app.use(express.json());
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationCode = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-// Connect to MongoDB
-const mongoUri = process.env.MONGO_URI;
-mongoose.connect(mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB connected'))
-.catch((err) => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1); // Stop server if DB fails to connect
+    const newUser = new User({
+      username,
+      email,
+      password: hashedPassword,
+      isVerified: false,
+      verificationCode,
+      verificationExpires: expiresAt,
+    });
+
+    await newUser.save();
+    await sendVerificationEmail(email, verificationCode);
+
+    res.status(201).json({ message: 'User registered. Check your email for the verification code.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Registration failed.', error: err.message });
+  }
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/cart', cartRoutes);
+// Email Verification route
+router.post('/verify', async (req, res) => {
+  const { email, code } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (user.isVerified) return res.status(400).json({ message: 'User already verified.' });
 
-// Health check endpoint (optional)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK' });
+    if (user.verificationCode !== code) {
+      return res.status(400).json({ message: 'Invalid verification code.' });
+    }
+
+    if (user.verificationExpires < new Date()) {
+      return res.status(400).json({ message: 'Verification code expired.' });
+    }
+
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Email verified. You can now log in.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Verification failed.', error: err.message });
+  }
 });
 
-// Error handling middleware (logs errors and sends 500)
-app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  res.status(500).json({ message: 'Internal Server Error', error: err.message });
+// Login route
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (!user.isVerified) return res.status(403).json({ message: 'Please verify your email first.' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ message: 'Incorrect password.' });
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed.', error: err.message });
+  }
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+export default router;
